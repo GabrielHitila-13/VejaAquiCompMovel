@@ -1,42 +1,81 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
     StyleSheet,
+    FlatList,
     TextInput,
     TouchableOpacity,
-    FlatList,
     KeyboardAvoidingView,
     Platform,
     ActivityIndicator,
-    SafeAreaView,
+    Image,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useChat, Message } from '@/hooks/useMessages';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { colors, spacing, typography } from '@/utils/theme';
 import { useAuth } from '@/context/AuthContext';
-import { colors, spacing, typography } from '../utils/theme';
+import { getMessages, sendMessage, subscribeToMessages, Message } from '@/services/messages';
 
-const ChatScreen = ({ route, navigation }: any) => {
-    const { conversationId, title } = route.params;
+export default function ChatScreen() {
+    const route = useRoute<any>();
+    const navigation = useNavigation();
     const { user } = useAuth();
-    const { messages, loading, sendMessage } = useChat(conversationId);
+    const { chatId, otherUser, property } = route.params;
+
+    const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [sending, setSending] = useState(false);
     const flatListRef = useRef<FlatList>(null);
 
+    useEffect(() => {
+        loadMessages();
+        const subscription = subscribeToMessages(chatId, (newMessage) => {
+            setMessages(prev => [...prev, newMessage]);
+        });
+
+        return () => {
+            subscription.unsubscribe();
+        };
+    }, [chatId]);
+
+    const loadMessages = async () => {
+        setLoading(true);
+        const data = await getMessages(chatId);
+        setMessages(data);
+        setLoading(false);
+    };
+
     const handleSend = async () => {
-        if (!inputText.trim()) return;
-        const ok = await sendMessage(inputText);
-        if (ok) setInputText('');
+        if (!inputText.trim() || !user || sending) return;
+
+        setSending(true);
+        const success = await sendMessage(chatId, user.id, inputText.trim());
+        if (success) {
+            setInputText('');
+        }
+        setSending(false);
     };
 
     const renderMessage = ({ item }: { item: Message }) => {
         const isMine = item.sender_id === user?.id;
         return (
-            <View style={[styles.messageBubble, isMine ? styles.myMessage : styles.theirMessage]}>
-                <Text style={[styles.messageText, isMine ? styles.myMessageText : styles.theirMessageText]}>
+            <View style={[
+                styles.messageBubble,
+                isMine ? styles.myMessage : styles.otherMessage
+            ]}>
+                <Text style={[
+                    styles.messageText,
+                    isMine ? styles.myMessageText : styles.otherMessageText
+                ]}>
                     {item.content}
                 </Text>
-                <Text style={[styles.messageTime, isMine ? styles.myMessageTime : styles.theirMessageTime]}>
+                <Text style={[
+                    styles.messageTime,
+                    isMine ? styles.myMessageTime : styles.otherMessageTime
+                ]}>
                     {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </Text>
             </View>
@@ -44,59 +83,95 @@ const ChatScreen = ({ route, navigation }: any) => {
     };
 
     return (
-        <SafeAreaView style={styles.safe}>
+        <SafeAreaView style={styles.container}>
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                    <MaterialIcons name="arrow-back" size={24} color={colors.foreground} />
+                </TouchableOpacity>
+                <View style={styles.headerInfo}>
+                    <Text style={styles.userName}>{otherUser?.full_name || 'Usuário'}</Text>
+                    <Text style={styles.propertyHint} numberOfLines={1}>{property?.title}</Text>
+                </View>
+            </View>
+
+            {loading ? (
+                <View style={styles.center}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                </View>
+            ) : (
+                <FlatList
+                    ref={flatListRef}
+                    data={messages}
+                    renderMessage={renderMessage}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={styles.listContent}
+                    onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+                />
+            )}
+
             <KeyboardAvoidingView
-                style={styles.container}
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
             >
-                {/* Header (Already provided by navigation usually, but title passed in) */}
-
-                {loading ? (
-                    <View style={styles.center}>
-                        <ActivityIndicator color={colors.primary} />
-                    </View>
-                ) : (
-                    <FlatList
-                        ref={flatListRef}
-                        data={messages}
-                        keyExtractor={item => item.id}
-                        renderItem={renderMessage}
-                        contentContainerStyle={styles.messageList}
-                        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-                        onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
-                    />
-                )}
-
                 <View style={styles.inputContainer}>
                     <TextInput
                         style={styles.input}
-                        placeholder="Escreva uma mensagem..."
                         value={inputText}
                         onChangeText={setInputText}
+                        placeholder="Escreva uma mensagem..."
                         multiline
                     />
                     <TouchableOpacity
-                        style={[styles.sendBtn, !inputText.trim() && styles.sendBtnDisabled]}
+                        style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
                         onPress={handleSend}
-                        disabled={!inputText.trim()}
+                        disabled={!inputText.trim() || sending}
                     >
-                        <Ionicons name="send" size={20} color="#fff" />
+                        {sending ? (
+                            <ActivityIndicator size="small" color="#FFF" />
+                        ) : (
+                            <MaterialIcons name="send" size={24} color="#FFF" />
+                        )}
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
-};
+}
 
 const styles = StyleSheet.create({
-    safe: { flex: 1, backgroundColor: colors.background },
-    container: { flex: 1 },
-    center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    messageList: { padding: spacing.md },
+    container: {
+        flex: 1,
+        backgroundColor: colors.background,
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: spacing.md,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+        backgroundColor: colors.card,
+    },
+    backButton: {
+        marginRight: spacing.md,
+    },
+    headerInfo: {
+        flex: 1,
+    },
+    userName: {
+        ...typography.label,
+        fontSize: 16,
+        color: colors.foreground,
+    },
+    propertyHint: {
+        fontSize: 12,
+        color: colors.primary,
+    },
+    listContent: {
+        padding: spacing.md,
+    },
     messageBubble: {
         maxWidth: '80%',
-        padding: spacing.md,
+        padding: 12,
         borderRadius: 16,
         marginBottom: spacing.sm,
     },
@@ -105,53 +180,64 @@ const styles = StyleSheet.create({
         backgroundColor: colors.primary,
         borderBottomRightRadius: 4,
     },
-    theirMessage: {
+    otherMessage: {
         alignSelf: 'flex-start',
-        backgroundColor: '#F1F5F9', // slate-100
+        backgroundColor: colors.muted,
         borderBottomLeftRadius: 4,
     },
     messageText: {
         fontSize: 15,
         lineHeight: 20,
     },
-    myMessageText: { color: '#fff' },
-    theirMessageText: { color: colors.foreground },
+    myMessageText: {
+        color: '#FFF',
+    },
+    otherMessageText: {
+        color: colors.foreground,
+    },
     messageTime: {
         fontSize: 10,
         marginTop: 4,
         alignSelf: 'flex-end',
     },
-    myMessageTime: { color: 'rgba(255,255,255,0.7)' },
-    theirMessageTime: { color: colors.mutedForeground },
+    myMessageTime: {
+        color: 'rgba(255,255,255,0.7)',
+    },
+    otherMessageTime: {
+        color: colors.mutedForeground,
+    },
     inputContainer: {
         flexDirection: 'row',
+        padding: spacing.md,
         alignItems: 'center',
-        padding: spacing.sm,
-        backgroundColor: '#fff',
         borderTopWidth: 1,
         borderTopColor: colors.border,
+        backgroundColor: colors.card,
     },
     input: {
         flex: 1,
-        backgroundColor: '#F8FAFC',
+        backgroundColor: colors.background,
         borderRadius: 20,
         paddingHorizontal: 16,
         paddingVertical: 8,
-        marginRight: spacing.sm,
-        fontSize: 15,
         maxHeight: 100,
+        color: colors.foreground,
     },
-    sendBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+    sendButton: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         backgroundColor: colors.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginLeft: spacing.sm,
+    },
+    sendButtonDisabled: {
+        backgroundColor: colors.muted,
+    },
+    center: {
+        flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    sendBtnDisabled: {
-        backgroundColor: colors.muted,
-    },
 });
-
-export default ChatScreen;

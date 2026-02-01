@@ -12,8 +12,8 @@ import { useNavigation } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/utils/theme';
 import { useAuth } from '@/context/AuthContext';
-import { getMyProperties } from '@/services/properties';
 import { Property } from '@/types/property';
+import { getMyProperties } from '@/services/properties';
 
 export default function OwnerDashboardScreen() {
     const navigation = useNavigation<any>();
@@ -77,6 +77,12 @@ export default function OwnerDashboardScreen() {
             icon: 'bar-chart',
             color: colors.success,
             onPress: () => navigation.navigate('OwnerStats'),
+        },
+        {
+            title: 'Conversas',
+            icon: 'chat',
+            color: colors.secondary,
+            onPress: () => navigation.navigate('ContactList'),
         },
     ];
 

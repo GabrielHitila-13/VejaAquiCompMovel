@@ -18,11 +18,13 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 
 import { useAuth } from '@/context/AuthContext';
-import { createProperty, uploadPropertyImage } from '@/services/properties';
+import { createProperty, uploadPropertyImage, uploadPropertyDocument } from '@/services/properties';
 import { colors, spacing, typography } from '@/utils/theme';
 import { Card, Input, Button } from '@/components/ui/Card';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { ImageUploader } from '@/components/owner/ImageUploader';
+import { DocumentUploader } from '@/components/owner/DocumentUploader';
+import { AMENITIES } from '@/constants/enums';
 
 // Zod Schema (Matching WebApp)
 const propertySchema = z.object({
@@ -48,6 +50,8 @@ const propertySchema = z.object({
   has_garden: z.boolean(),
   has_security: z.boolean(),
   allows_renovations: z.boolean(),
+  special_conditions: z.string().optional(),
+  amenities: z.array(z.string()).optional(),
 });
 
 type PropertyFormData = z.infer<typeof propertySchema>;
@@ -104,8 +108,12 @@ export default function PublishScreen() {
       has_garden: false,
       has_security: false,
       allows_renovations: false,
+      special_conditions: "",
+      amenities: [],
     },
   });
+
+  const [docImages, setDocImages] = useState<string[]>([]);
 
   const handleGetCurrentLocation = async () => {
     setGettingLocation(true);
@@ -152,6 +160,17 @@ export default function PublishScreen() {
         }
       }
 
+      // Upload Documents
+      const uploadedDocUrls: string[] = [];
+      for (const docUri of docImages) {
+        if (docUri.startsWith('file:') || docUri.startsWith('content:')) {
+          const url = await uploadPropertyDocument(docUri, user.id);
+          if (url) uploadedDocUrls.push(url);
+        } else {
+          uploadedDocUrls.push(docUri);
+        }
+      }
+
       // Prepare payload
       const payload: any = {
         ...data,
@@ -160,6 +179,8 @@ export default function PublishScreen() {
         is_available: true,
         images: uploadedUrls,
         cover_image: uploadedUrls[0] || null,
+        documentation_urls: uploadedDocUrls,
+        has_documents: uploadedDocUrls.length > 0,
       };
 
       // Map Enum values if necessary (DB expects specific strings)
@@ -207,6 +228,16 @@ export default function PublishScreen() {
             images={images}
             onImagesChange={setImages}
             maxImages={10}
+          />
+        </Card>
+
+        {/* Documents */}
+        <Card style={styles.card}>
+          <Text style={styles.sectionTitle}>Documentação Legais</Text>
+          <DocumentUploader
+            documents={docImages}
+            onDocumentsChange={setDocImages}
+            maxDocs={5}
           />
         </Card>
 
@@ -517,6 +548,56 @@ export default function PublishScreen() {
               )}
             />
           </View>
+
+
+          <Text style={[styles.label, { marginTop: spacing.md }]}>Outras Comodidades</Text>
+          <View style={styles.checkboxGrid}>
+            {AMENITIES.map((amenity) => (
+              <TouchableOpacity
+                key={amenity.id}
+                style={[
+                  styles.amenityChip,
+                  (watch('amenities') || []).includes(amenity.id) && styles.amenityChipSelected
+                ]}
+                onPress={() => {
+                  const current = watch('amenities') || [];
+                  if (current.includes(amenity.id)) {
+                    setValue('amenities', current.filter(id => id !== amenity.id));
+                  } else {
+                    setValue('amenities', [...current, amenity.id]);
+                  }
+                }}
+              >
+                <MaterialIcons
+                  name={(watch('amenities') || []).includes(amenity.id) ? "check-box" : "check-box-outline-blank"}
+                  size={20}
+                  color={(watch('amenities') || []).includes(amenity.id) ? colors.primary : colors.mutedForeground}
+                />
+                <Text style={[
+                  styles.amenityText,
+                  (watch('amenities') || []).includes(amenity.id) && styles.amenityTextSelected
+                ]}>{amenity.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={{ marginTop: spacing.md }}>
+            <Controller
+              control={control}
+              name="special_conditions"
+              render={({ field: { onChange, value } }) => (
+                <Input
+                  label="Condições Especiais / Regras"
+                  placeholder="Ex: Não aceita animais, limpeza semanal incluída..."
+                  value={value}
+                  onChangeText={onChange}
+                  multiline
+                  numberOfLines={3}
+                  style={styles.textAreaSmall}
+                />
+              )}
+            />
+          </View>
         </Card>
 
         <Button
@@ -535,7 +616,7 @@ export default function PublishScreen() {
         </Button>
         <View style={{ height: 40 }} />
       </ScrollView>
-    </SafeAreaView>
+    </SafeAreaView >
   );
 }
 
@@ -583,6 +664,10 @@ const styles = StyleSheet.create({
   },
   textArea: {
     height: 100,
+    textAlignVertical: 'top',
+  },
+  textAreaSmall: {
+    height: 70,
     textAlignVertical: 'top',
   },
   label: {
@@ -633,6 +718,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.md,
+  },
+  amenityChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '45%',
+    padding: 8,
+    gap: 8,
+  },
+  amenityChipSelected: {
+    backgroundColor: colors.primary + '05',
+    borderRadius: 8,
+  },
+  amenityText: {
+    fontSize: 14,
+    color: colors.mutedForeground,
+  },
+  amenityTextSelected: {
+    color: colors.primary,
+    fontWeight: '500',
   },
   submitButton: {
     marginVertical: spacing.lg,

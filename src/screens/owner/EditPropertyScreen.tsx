@@ -16,8 +16,9 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/utils/theme';
 import { useAuth } from '@/context/AuthContext';
-import { createProperty, updateProperty, getPropertyById, uploadPropertyImage } from '@/services/properties';
+import { createProperty, updateProperty, getPropertyById, uploadPropertyImage, uploadPropertyDocument } from '@/services/properties';
 import { ImageUploader } from '@/components/owner/ImageUploader';
+import { DocumentUploader } from '@/components/owner/DocumentUploader';
 import { PROPERTY_TYPES, AMENITIES, PROVINCES, RENTAL_DURATIONS } from '@/constants/enums';
 
 export default function EditPropertyScreen() {
@@ -44,6 +45,8 @@ export default function EditPropertyScreen() {
     const [area, setArea] = useState('');
     const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
     const [availableCities, setAvailableCities] = useState<string[]>([]);
+    const [docImages, setDocImages] = useState<string[]>([]);
+    const [specialConditions, setSpecialConditions] = useState('');
 
     useEffect(() => {
         // Mock cities for selected province (Expand this later)
@@ -78,6 +81,8 @@ export default function EditPropertyScreen() {
             setArea(data.area_sqm?.toString() || '');
             setImages(data.images || (data.cover_image ? [data.cover_image] : []));
             setSelectedAmenities(data.amenities || []);
+            setDocImages(data.documentation_urls || []);
+            setSpecialConditions(data.special_conditions || '');
         }
         setLoading(false);
     };
@@ -112,6 +117,15 @@ export default function EditPropertyScreen() {
                 return img;
             }));
 
+            // 2. Upload new documents
+            const uploadedDocs = await Promise.all(docImages.map(async (doc) => {
+                if (doc.startsWith('file:') || doc.startsWith('content:')) {
+                    const url = await uploadPropertyDocument(doc, user.id);
+                    return url || doc;
+                }
+                return doc;
+            }));
+
             const propertyData: any = {
                 title,
                 description,
@@ -127,6 +141,9 @@ export default function EditPropertyScreen() {
                 amenities: selectedAmenities,
                 images: uploadedImages,
                 cover_image: uploadedImages[0] || null,
+                documentation_urls: uploadedDocs,
+                has_documents: uploadedDocs.length > 0,
+                special_conditions: specialConditions,
                 owner_id: user.id,
                 is_available: true,
                 currency: 'MT',
@@ -168,6 +185,15 @@ export default function EditPropertyScreen() {
                         onImagesChange={setImages}
                         maxImages={10}
                     />
+
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Documentação Legais</Text>
+                        <DocumentUploader
+                            documents={docImages}
+                            onDocumentsChange={setDocImages}
+                            maxDocs={5}
+                        />
+                    </View>
 
                     <View style={styles.section}>
                         <Text style={styles.sectionTitle}>Informações Básicas</Text>
@@ -354,6 +380,18 @@ export default function EditPropertyScreen() {
                                 </TouchableOpacity>
                             ))}
                         </View>
+
+                        <Text style={[styles.label, { marginTop: spacing.md }]}>Condições Especiais</Text>
+                        <TextInput
+                            style={[styles.input, styles.textAreaSmall]}
+                            value={specialConditions}
+                            onChangeText={setSpecialConditions}
+                            multiline
+                            numberOfLines={3}
+                            placeholder="Ex: Não aceita animais..."
+                        />
+
+
                     </View>
 
                     <TouchableOpacity
@@ -423,6 +461,14 @@ const styles = StyleSheet.create({
     textArea: {
         height: 100,
         textAlignVertical: 'top',
+    },
+    textAreaSmall: {
+        height: 70,
+        textAlignVertical: 'top',
+        marginTop: 4,
+    },
+    switchThumbActive: {
+        transform: [{ translateX: 22 }],
     },
     row: {
         flexDirection: 'row',

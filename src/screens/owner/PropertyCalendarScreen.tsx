@@ -50,11 +50,7 @@ export default function PropertyCalendarScreen() {
         const data = await getPropertyById(propertyId);
         if (data) {
             setPropertyName(data.title);
-            // We assume availability is stored as 'unavailable_dates' array of strings (YYYY-MM-DD)
-            // or we just mock/store it in a custom field if schema permits.
-            // For now, let's assume 'unavailable_dates' property exists on data (might need to add to type)
-            // Since it's not in the Type yet, I'll cast data as any for this specific field or use local state simulation
-            const unavailable = (data as any).unavailable_dates || [];
+            const unavailable = data.unavailable_dates || [];
             const marked = unavailable.reduce((acc: any, date: string) => {
                 acc[date] = { selected: true, selectedColor: colors.destructive, type: 'busy' };
                 return acc;
@@ -84,9 +80,7 @@ export default function PropertyCalendarScreen() {
         setLoading(true);
         try {
             const unavailableDates = Object.keys(markedDates);
-            // Update property with new unavailable dates
-            // Note: This requires 'unavailable_dates' column in DB or JSONB field
-            await updateProperty(propertyId, { unavailable_dates: unavailableDates } as any);
+            await updateProperty(propertyId, { unavailable_dates: unavailableDates });
             Alert.alert('Sucesso', 'Disponibilidade atualizada!');
         } catch (error) {
             console.error('Error saving availability:', error);

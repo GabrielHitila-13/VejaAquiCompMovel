@@ -5,6 +5,8 @@ import MyPropertiesScreen from '../screens/owner/MyPropertiesScreen';
 import EditPropertyScreen from '../screens/owner/EditPropertyScreen';
 import PropertyCalendarScreen from '../screens/owner/PropertyCalendarScreen';
 import OwnerStatsScreen from '../screens/owner/OwnerStatsScreen';
+import ContactListScreen from '../screens/owner/ContactListScreen';
+import ChatScreen from '../screens/ChatScreen';
 import { colors } from '@/utils/theme';
 
 export type OwnerStackParamList = {
@@ -13,6 +15,8 @@ export type OwnerStackParamList = {
     EditProperty: { propertyId?: string };
     PropertyCalendar: { propertyId: string };
     OwnerStats: undefined;
+    ContactList: undefined;
+    Chat: { chatId: string; otherUser: any; property: any };
 };
 
 const Stack = createNativeStackNavigator<OwnerStackParamList>();
@@ -56,6 +60,16 @@ export function OwnerStack() {
                 name="OwnerStats"
                 component={OwnerStatsScreen}
                 options={{ title: 'Estatísticas' }}
+            />
+            <Stack.Screen
+                name="ContactList"
+                component={ContactListScreen}
+                options={{ title: 'Conversas' }}
+            />
+            <Stack.Screen
+                name="Chat"
+                component={ChatScreen}
+                options={{ title: 'Mensagens' }}
             />
         </Stack.Navigator>
     );

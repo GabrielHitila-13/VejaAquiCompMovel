@@ -613,6 +613,8 @@ export async function renewProperty(id: string): Promise<boolean> {
   }
 }
 
+
+
 /**
  * Upload de imagem de propriedade
  * Nota: Isso requer configuração de Storage no Supabase
@@ -651,6 +653,47 @@ export async function uploadPropertyImage(fileUri: string, userId: string): Prom
     return publicUrl;
   } catch (error) {
     console.error('Exception in uploadPropertyImage:', error);
+    return null;
+  }
+}
+
+/**
+ * Upload de documento de propriedade
+ * bucket: 'property-documents'
+ */
+export async function uploadPropertyDocument(fileUri: string, userId: string): Promise<string | null> {
+  try {
+    const fileName = `${userId}/${Date.now()}_doc`;
+    const formData = new FormData();
+
+    // Determine extension from URI if possible, or default to pdf/jpg
+    const extension = fileUri.split('.').pop() || 'pdf';
+    const name = `${fileName}.${extension}`;
+
+    formData.append('file', {
+      uri: fileUri,
+      name: name,
+      type: extension === 'pdf' ? 'application/pdf' : 'image/jpeg',
+    } as any);
+
+    const { data, error } = await supabase.storage
+      .from('property-documents')
+      .upload(name, formData, {
+        contentType: extension === 'pdf' ? 'application/pdf' : 'image/jpeg',
+      });
+
+    if (error) {
+      console.error('Error uploading document:', error);
+      return null;
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('property-documents')
+      .getPublicUrl(name);
+
+    return publicUrl;
+  } catch (error) {
+    console.error('Exception in uploadPropertyDocument:', error);
     return null;
   }
 }

@@ -18,6 +18,9 @@ import { useAuth } from '../context/AuthContext';
 import { useVisits } from '../hooks/useVisits';
 import { supabase } from '../services/supabase';
 import { getSavedSearches, deleteSavedSearch, SavedSearch } from '../services/savedSearches';
+import { getViewHistory } from '../services/history';
+import { getUserBookings, Booking } from '../services/bookings';
+import { getUserVisits, Visit } from '../services/visits';
 import { colors, spacing, typography } from '../utils/theme';
 import { useSearchFilters } from '../hooks/useSearchFilters';
 
@@ -196,6 +199,14 @@ export default function ProfileScreen() {
           {() => <VisitsTab userId={user!.id} />}
         </Tab.Screen>
 
+        <Tab.Screen name="Reservas">
+          {() => <BookingsTab userId={user!.id} />}
+        </Tab.Screen>
+
+        <Tab.Screen name="Histórico">
+          {() => <HistoryTab userId={user!.id} />}
+        </Tab.Screen>
+
         <Tab.Screen name="Buscas">
           {() => <SavedSearchesTab userId={user!.id} />}
         </Tab.Screen>
@@ -205,21 +216,23 @@ export default function ProfileScreen() {
 }
 
 /* ===========================
-   VISITS TAB (MOBILE)
+   VISITS TAB (MOBILE ENHANCED)
 =========================== */
 function VisitsTab({ userId }: { userId: string }) {
-  const { visits, loading } = useVisits({
-    userId,
-    viewType: 'visitor',
-  });
+  const [visits, setVisits] = useState<Visit[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator />
-      </View>
-    );
-  }
+  useEffect(() => {
+    loadVisits();
+  }, []);
+
+  const loadVisits = async () => {
+    const data = await getUserVisits(userId);
+    setVisits(data);
+    setLoading(false);
+  };
+
+  if (loading) return <ActivityIndicator style={{ marginTop: 20 }} />;
 
   if (visits.length === 0) {
     return (
@@ -236,7 +249,7 @@ function VisitsTab({ userId }: { userId: string }) {
         <View key={visit.id} style={styles.card}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <Text style={styles.cardTitle}>
-              {visit.property?.title || 'Propriedade'}
+              {visit.properties?.title || visit.property?.title || 'Propriedade'}
             </Text>
             <View style={[styles.statusBadge, { backgroundColor: getStatusColor(visit.status) }]}>
               <Text style={styles.statusText}>{visit.status.toUpperCase()}</Text>
@@ -246,16 +259,110 @@ function VisitsTab({ userId }: { userId: string }) {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Ionicons name="calendar-outline" size={14} color="#64748B" />
             <Text style={{ fontSize: 13, color: '#64748B' }}>
-              {new Date(visit.scheduled_date).toLocaleDateString()} às {visit.scheduled_time}
+              {new Date(visit.visit_date).toLocaleDateString()} às {new Date(visit.visit_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </Text>
           </View>
-
-          {visit.notes && (
-            <Text style={{ marginTop: 8, fontSize: 12, fontStyle: 'italic', color: '#64748B' }}>
-              "{visit.notes}"
-            </Text>
-          )}
         </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+/* ===========================
+   BOOKINGS TAB
+=========================== */
+function BookingsTab({ userId }: { userId: string }) {
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadBookings();
+  }, []);
+
+  const loadBookings = async () => {
+    const data = await getUserBookings(userId);
+    setBookings(data);
+    setLoading(false);
+  };
+
+  if (loading) return <ActivityIndicator style={{ marginTop: 20 }} />;
+
+  if (bookings.length === 0) {
+    return (
+      <View style={styles.center}>
+        <Ionicons name="flash-outline" size={48} color="#CBD5E1" />
+        <Text style={{ color: '#64748B', marginTop: 12 }}>Nenhuma reserva realizada</Text>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      {bookings.map((booking) => (
+        <View key={booking.id} style={styles.card}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <Text style={styles.cardTitle}>
+              {booking.properties?.title || booking.property?.title || 'Propriedade'}
+            </Text>
+            <View style={[styles.statusBadge, { backgroundColor: '#10B981' }]}>
+              <Text style={styles.statusText}>{booking.status.toUpperCase()}</Text>
+            </View>
+          </View>
+
+          <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 4 }}>
+            Total: {booking.total_price.toLocaleString('pt-BR')} MT
+          </Text>
+          <Text style={{ fontSize: 11, color: '#94A3B8' }}>
+            Reservado em: {new Date(booking.created_at).toLocaleDateString()}
+          </Text>
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+/* ===========================
+   HISTORY TAB
+=========================== */
+function HistoryTab({ userId }: { userId: string }) {
+  const navigation = useNavigation<any>();
+  const [history, setHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadHistory();
+  }, []);
+
+  const loadHistory = async () => {
+    const data = await getViewHistory(userId);
+    setHistory(data);
+    setLoading(false);
+  };
+
+  if (loading) return <ActivityIndicator style={{ marginTop: 20 }} />;
+
+  if (history.length === 0) {
+    return (
+      <View style={styles.center}>
+        <Ionicons name="eye-outline" size={48} color="#CBD5E1" />
+        <Text style={{ color: '#64748B', marginTop: 12 }}>Histórico vazio</Text>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      {history.map((property) => (
+        <TouchableOpacity
+          key={property.id}
+          style={styles.card}
+          onPress={() => navigation.navigate('PropertyDetail', { propertyId: property.id })}
+        >
+          <Text style={styles.cardTitle}>{property.title}</Text>
+          <Text style={{ fontSize: 13, color: '#64748B' }}>
+            {property.city}, {property.province}
+          </Text>
+        </TouchableOpacity>
       ))}
     </ScrollView>
   );

@@ -10,7 +10,7 @@ export interface Property {
   description?: string;
   property_type: 'apartamento' | 'vivenda' | 'moradia' | 'casa' | 'terreno' | 'escritorio' | 'loja' | 'armazem' | 'quintal' | 'quarto' | 'guesthouse' | 'comercial';
   price: number;
-  rental_duration?: 'curta' | 'media' | 'longa';
+  rental_duration?: 'daily' | 'monthly' | 'yearly';
   city: string;
   province: string;
   neighborhood?: string;
@@ -35,13 +35,18 @@ export interface Property {
   is_available: boolean;
   is_approved?: boolean;
   views_count?: number;
+  documentation_urls?: string[];
+  special_conditions?: string;
+  unavailable_dates?: string[];
   created_at: string;
   updated_at: string;
 
   // Virtual / Joined fields (if any)
   images?: string[];
-  // ycover_image?: string;
+  cover_image?: string;
   owner_name?: string;
+  location?: string;
+  amenities?: string[];
 }
 
 export interface PropertyType {

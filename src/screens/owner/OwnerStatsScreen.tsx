@@ -13,10 +13,14 @@ import { useAuth } from '@/context/AuthContext';
 import { getMyProperties } from '@/services/properties';
 import { Property } from '@/types/property';
 import { MaterialIcons } from '@expo/vector-icons';
+import { getOwnerVisits, Visit } from '@/services/visits';
+import { getOwnerBookings, Booking } from '@/services/bookings';
 
 export default function OwnerStatsScreen() {
     const { user } = useAuth();
     const [properties, setProperties] = useState<Property[]>([]);
+    const [visits, setVisits] = useState<Visit[]>([]);
+    const [bookings, setBookings] = useState<Booking[]>([]);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
@@ -26,8 +30,14 @@ export default function OwnerStatsScreen() {
     const fetchData = async () => {
         if (!user) return;
         setLoading(true);
-        const data = await getMyProperties(user.id);
-        setProperties(data);
+        const [props, vsts, bks] = await Promise.all([
+            getMyProperties(user.id),
+            getOwnerVisits(user.id),
+            getOwnerBookings(user.id)
+        ]);
+        setProperties(props);
+        setVisits(vsts);
+        setBookings(bks);
         setLoading(false);
     };
 
@@ -63,6 +73,20 @@ export default function OwnerStatsScreen() {
                         <MaterialIcons name="trending-up" size={24} color={colors.success} />
                         <Text style={[styles.metricValue, { color: colors.success }]}>{avgViews}</Text>
                         <Text style={styles.metricLabel}>Média por Imóvel</Text>
+                    </View>
+                </View>
+
+                {/* Additional Metrics */}
+                <View style={styles.metricsGrid}>
+                    <View style={styles.metricCard}>
+                        <MaterialIcons name="event" size={24} color={colors.warning} />
+                        <Text style={[styles.metricValue, { color: colors.warning }]}>{visits.length}</Text>
+                        <Text style={styles.metricLabel}>Visitas Agendadas</Text>
+                    </View>
+                    <View style={styles.metricCard}>
+                        <MaterialIcons name="book" size={24} color={colors.info} />
+                        <Text style={[styles.metricValue, { color: colors.info }]}>{bookings.length}</Text>
+                        <Text style={styles.metricLabel}>Reservas Confirmadas</Text>
                     </View>
                 </View>
 

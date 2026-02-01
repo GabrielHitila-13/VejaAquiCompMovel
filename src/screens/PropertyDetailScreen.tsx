@@ -9,6 +9,8 @@ import {
   Share,
   StyleSheet,
   Linking,
+  Platform,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -25,11 +27,19 @@ import { OwnerInfoSection } from '@/components/property/OwnerInfoSection';
 import { LegalStatusSection } from '@/components/property/LegalStatusSection';
 import { PropertyHistorySection } from '@/components/property/PropertyHistorySection';
 import { SpecialConditionsSection } from '@/components/property/SpecialConditionsSection';
+import { SchedulingModal } from '@/components/property/SchedulingModal';
+import { BookingModal } from '@/components/property/BookingModal';
+
+// Services
+import { addToHistory } from '@/services/history';
+import { getOrCreateChat } from '@/services/chats';
 
 const PropertyDetailScreen = ({ route, navigation }: any) => {
   const [property, setProperty] = useState<Property | null>(null);
   const [loading, setLoading] = useState(true);
   const [showFullDescription, setShowFullDescription] = useState(false);
+  const [schedulingModalVisible, setSchedulingModalVisible] = useState(false);
+  const [bookingModalVisible, setBookingModalVisible] = useState(false);
 
   const { propertyId } = route.params;
   const { user } = useAuth();
@@ -38,8 +48,11 @@ const PropertyDetailScreen = ({ route, navigation }: any) => {
   useEffect(() => {
     if (propertyId) {
       fetchProperty();
+      if (user) {
+        addToHistory(user.id, propertyId);
+      }
     }
-  }, [propertyId]);
+  }, [propertyId, user]);
 
   const fetchProperty = async () => {
     try {
@@ -61,19 +74,50 @@ const PropertyDetailScreen = ({ route, navigation }: any) => {
   };
 
   const handleScheduleVisit = () => {
-    Alert.alert(
-      'Agendar Visita',
-      'Deseja agendar uma visita para este imóvel?',
-      [
-        { text: 'Cancelar', onPress: () => { } },
-        {
-          text: 'Agendar',
-          onPress: () => {
-            Alert.alert('Sucesso', 'Visita agendada com sucesso! O proprietário entrará em contato.');
-          },
-        },
-      ]
-    );
+    if (!user) {
+      Alert.alert('Aviso', 'Você precisa estar logado para agendar uma visita.');
+      return;
+    }
+    setSchedulingModalVisible(true);
+  };
+
+  const handleBookNow = () => {
+    if (!user) {
+      Alert.alert('Aviso', 'Você precisa estar logado para reservar um imóvel.');
+      return;
+    }
+    setBookingModalVisible(true);
+  };
+
+  const handleContactOwner = async () => {
+    if (!user || !property) {
+      Alert.alert('Aviso', 'Você precisa estar logado para contactar o proprietário.');
+      return;
+    }
+
+    if (user.id === property.owner_id) {
+      Alert.alert('Aviso', 'Este imóvel é seu.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const chatId = await getOrCreateChat(property.owner_id, user.id, property.id);
+      setLoading(false);
+
+      if (chatId) {
+        navigation.navigate('Chat', {
+          chatId,
+          otherUser: { full_name: property.owner_name || 'Proprietário' },
+          property: { title: property.title }
+        });
+      } else {
+        Alert.alert('Erro', 'Não foi possível iniciar a conversa.');
+      }
+    } catch (error) {
+      setLoading(false);
+      console.error('Error starting chat:', error);
+    }
   };
 
   const handleShare = async () => {
@@ -192,6 +236,17 @@ const PropertyDetailScreen = ({ route, navigation }: any) => {
             </View>
           </View>
 
+          {/* Actions Bar - Middle */}
+          <View style={styles.middleActionBar}>
+            <TouchableOpacity
+              style={styles.bookNowButton}
+              onPress={handleBookNow}
+            >
+              <MaterialIcons name="flash-on" size={20} color="#FFF" />
+              <Text style={styles.bookNowButtonText}>Reservar Agora</Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Description */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Descrição</Text>
@@ -245,13 +300,35 @@ const PropertyDetailScreen = ({ route, navigation }: any) => {
         </Pressable>
 
         <Pressable
-          onPress={() => Linking.openURL(`https://wa.me/?text=Tenho interesse no imóvel: ${property.title}`)}
+          onPress={handleContactOwner}
           style={styles.contactButton}
         >
           <MaterialIcons name="chat" size={20} color={colors.primary} />
-          <Text style={styles.contactButtonText}>Contato</Text>
+          <Text style={styles.contactButtonText}>Chat</Text>
         </Pressable>
       </View>
+
+      {/* Modals */}
+      {user && (
+        <>
+          <SchedulingModal
+            visible={schedulingModalVisible}
+            onClose={() => setSchedulingModalVisible(false)}
+            propertyId={property.id}
+            userId={user.id}
+            propertyName={property.title}
+          />
+          <BookingModal
+            visible={bookingModalVisible}
+            onClose={() => setBookingModalVisible(false)}
+            propertyId={property.id}
+            userId={user.id}
+            propertyName={property.title}
+            price={property.price}
+            currency={property.currency}
+          />
+        </>
+      )}
     </SafeAreaView>
   );
 };
@@ -403,6 +480,28 @@ const styles = StyleSheet.create({
   amenityText: {
     ...typography.bodySmall,
     color: colors.foreground,
+  },
+  middleActionBar: {
+    marginBottom: spacing.lg,
+  },
+  bookNowButton: {
+    backgroundColor: colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    borderRadius: 12,
+    gap: spacing.sm,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  bookNowButtonText: {
+    ...typography.h4,
+    color: '#FFF',
+    fontWeight: '700',
   },
   bottomBar: {
     position: 'absolute',
